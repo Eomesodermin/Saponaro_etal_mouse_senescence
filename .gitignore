@@ -9,6 +9,10 @@
 # User-specific files
 .Ruserdata
 
+# large output
+saves/**/**
+results/**/**
+
 # Example code in package build process
 *-Ex.R
 
