@@ -448,7 +448,8 @@ if(long.compute){
 ### Azimuth cell type prediction/annotation
 ```{r Azimuth_celltype_prediction}
 
-if(long.compute){
+do.azimuth <- FALSE
+if(do.azimuth){
   
   #######################################
   # quick prediction of cell annotations
@@ -473,7 +474,6 @@ if(long.compute){
 }
 
 ```
-
 
 ### Normalise & integrate GEX data
 ```{r Normalise_and_integrate_GEX_data}
@@ -819,7 +819,9 @@ if(!dir.exists(output.dir)){
   
 }
 
-goi <- c("CD3E", "CD20", "NCAM1", "FOXP3", "CD8A", "CD8B", "CD4")
+
+
+goi <- c("Cd3e", "Cd20", "Ncam1", "Foxp3", "Cd8a", "Cd8b", "Cd4", "Nkg7")
 
 DoHeatmap(pseudo.seurat, 
             features = goi, 
