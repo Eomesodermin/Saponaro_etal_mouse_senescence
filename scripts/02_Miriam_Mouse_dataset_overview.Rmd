@@ -1,0 +1,597 @@
+---
+title: "Miriam_Mouse_dataset_Overview"
+author: "Dillon Corvino"
+date: "21/11/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+Built with R version `r getRversion()`
+
+## Setup {.tabset}
+
+### Dataset information
+```{r Dataset_Info}
+
+# Mouse 
+
+
+```
+
+### Environment
+```{r setup}
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,  
+  eval = TRUE, 
+  tidy = TRUE
+)
+
+knitr::opts_knit$set(
+  root.dir = "../"
+)
+
+# Environment Set up
+rm(list = ls()) #Clean workspace
+cat("\014")     #Clean Console
+gc() # Free memory
+
+# pipeline variables
+long.compute <- TRUE
+do.plot <- TRUE
+
+# Establish working directory
+library("rstudioapi")
+
+# Set working directory to source file location
+setwd(dirname(getActiveDocumentContext()$path))
+setwd("..")
+
+# Create output directories & load custom functions & colour scheme
+source("scripts/Setup.R", local = knitr::knit_global())
+
+# load packages
+library("Seurat")
+library("SeuratExtend")
+
+# Load the future package
+library(future)
+
+# Set the maximum size of globals that can be exported to 50 GB
+options(future.globals.maxSize = 50 * 1024^3)  # 50 GB in bytes
+getOption("future.globals.maxSize")
+
+
+# Ensure ggplot2 is the correct version - requires restarting Rsession and loading packages again
+ggplot2_switch_version(desired_version = "3.5.0")
+
+```
+
+
+## Load dataset {.tabset}
+
+
+### Load dataset
+```{r load_dataset}
+
+  seurat.mouse <- LoadSeuratRds("saves/seurat.mouse.rds")
+
+# set some formatting for nicer plotting downstream 
+seurat.mouse@meta.data$sampleid <- factor(seurat.mouse@meta.data$sampleid, levels = c("PTEN", "PTEN_CDCP1"))
+
+```
+
+## Genes of interest {.tabset}
+
+### Load genes of interest
+```{r genes_of_interest}
+
+miriam.goi <- readxl::read_excel("scripts/variables/Gene_list_mouse.xlsx", col_names = F)
+miriam.goi <- miriam.goi$...1
+miriam.goi
+
+
+```
+
+### Heatmap & Feature & Density plots
+```{r genes_of_interest_overview}
+
+# create output dir
+output.dir <- paste0("results/genes_of_interest_overview/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+DefaultAssay(seurat.mouse) <- "SCT"
+  
+  Idents(seurat.mouse) <- "seurat_clusters"
+table(Idents(seurat.mouse))
+
+
+
+# create pseudobulk for visualisation
+pseudo.seurat <- AggregateExpression(seurat.mouse, 
+                                     assays = "SCT",
+                                     return.seurat = TRUE,
+                                     group.by = c("seurat_clusters"))
+  
+# set idents of pseudobulk object
+Idents(pseudo.seurat) <- "seurat_clusters"
+
+DoHeatmap(pseudo.seurat, 
+          features = miriam.goi, 
+          draw.lines = FALSE,
+          raster = FALSE) + NoLegend()
+  
+dev.copy(pdf, paste0(output.dir, "Heatmap_seurat_clusters_pseudobulk_goi.pdf"))
+dev.off()
+
+
+ggplot2_switch_version(desired_version = "3.4.4")
+
+
+
+
+
+# Plot Feature and Density plots iteratively over goi 
+for(i in seq_along(miriam.goi)){
+  
+  if(miriam.goi[i] %in% rownames(seurat.mouse)){
+    
+    # feature plots
+    print(
+      scCustomize::FeaturePlot_scCustom(seurat.mouse, 
+                                        reduction = "umap.cca.sct", 
+                                        features = miriam.goi[i])
+      
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_", miriam.goi[i], ".pdf"))
+    dev.off()
+    
+    # density plots
+    
+    print(
+      scCustomize::Plot_Density_Custom(seurat.mouse, 
+                                       reduction = "umap.cca.sct",
+                                       features = miriam.goi[i], 
+                                       custom_palette = batlow.pal)
+    )
+    dev.copy(pdf, paste0(output.dir, "UMAP_DensityPlot_", miriam.goi[i], ".pdf"))
+    dev.off()
+    
+    # Vln plots
+    
+    print(
+      scCustomize::VlnPlot_scCustom(seurat.mouse, 
+                                    features = miriam.goi[i], 
+                                    pt.size = 0, 
+                                    group.by = "seurat_clusters") + 
+        NoLegend()
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "VlnPlot_", miriam.goi[i], ".pdf"))
+    dev.off()
+    
+    # split by treatment
+    print(
+      scCustomize::VlnPlot_scCustom(seurat.mouse, 
+                                    features = miriam.goi[i], 
+                                    split.by = "sampleid",
+                                    pt.size = 0, 
+                                    group.by = "seurat_clusters")
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "VlnPlot_", miriam.goi[i], "_split_by_treatment.pdf"))
+    dev.off()
+    
+  }
+}
+ggplot2_switch_version(desired_version = "3.5.0")
+
+
+
+```
+
+
+### Cell Cycle scoring
+```{r cell_cycle}
+
+# create output dir
+output.dir <- paste0("results/cell_cycle/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+################################
+# Get cell cycle genes 
+################################
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+
+#####################
+# score cell cycle
+#####################
+
+seurat.human <- CellCycleScoring(seurat.human,
+                                   s.features = s.genes,
+                                   g2m.features = g2m.genes,
+                                   set.ident = TRUE)
+
+
+#####################
+# Visualise score
+#####################
+
+head(seurat.human@meta.data)
+
+# Feature plots 
+
+# S-score 
+scCustomize::FeaturePlot_scCustom(seurat.human, 
+                                  feature = "S.Score", 
+                                  reduction = "umap.cca.sct")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_S_score.pdf"))
+dev.off()
+
+# G2M-score 
+scCustomize::FeaturePlot_scCustom(seurat.human, 
+                                  feature = "G2M.Score", 
+                                  reduction = "umap.cca.sct")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_G2M_score.pdf"))
+dev.off()
+
+# Dim plot split by phase
+scCustomize::DimPlot_scCustom(seurat.human, 
+                              group.by = "sampleid",
+                              split.by = "Phase",
+                              label = TRUE,
+                              reduction = "umap.cca.sct")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_by_phase.pdf"))
+dev.off()
+
+
+# Stacked VlnPlot
+scCustomize::Stacked_VlnPlot(seurat.human,
+                             features = c("S.Score", "G2M.Score"), 
+                             group.by = "sampleid")
+
+dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_cell_cycle.pdf"))
+dev.off()
+
+
+# Stacked VlnPlot
+scCustomize::Stacked_VlnPlot(seurat.human,
+                             features = c("S.Score", "G2M.Score"), 
+                             group.by = "seurat_clusters")
+
+dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_seurat_clusters_cell_cycle.pdf"))
+dev.off()
+
+
+###################
+# Quantification 
+###################
+
+
+# Frequency of phase per cluster
+dist.table <- table(seurat.human@meta.data$seurat_clusters, seurat.human@meta.data$Phase)
+
+cluster.total <- rowSums(dist.table)
+
+freq.table <- sweep(dist.table, 1, cluster.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+rowSums(freq.table)
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("G1", "G2M", "S"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Predicted phase", y = "% of cluster", title = "Frequency of phase per cluster") +
+  scale_fill_manual(values = c(G1 = "lightblue", G2M = "orange", S = "red")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_cluster.pdf"))
+
+
+# Frequency of phase per sampleID
+
+dist.table <- table(seurat.human@meta.data$sampleid, seurat.human@meta.data$Phase)
+
+treatment.total <- rowSums(dist.table)
+
+freq.table <- sweep(dist.table, 1, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+rowSums(freq.table)
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("G1", "G2M", "S"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Predicted phase", y = "% of treatment", title = "Frequency of phase per sampleID") +
+  scale_fill_manual(values = c(G1 = "lightblue", G2M = "orange", S = "red")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_sampleid.pdf"))
+
+```
+
+
+
+# WORK IN PROGRESS
+```{r tricycle}
+
+
+# create output dir
+output.dir <- paste0("results/cell_cycle/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+
+#BiocManager::install("tricycle")
+
+library("Seurat")
+library("SeuratWrappers")
+library("tricycle")
+
+
+DefaultAssay(seurat.human) <- "SCT"
+
+seurat.human <- Runtricycle(seurat.human,
+                            assay = "SCT",
+                            slot = "data", 
+                            reduction.name = "tricycleEmbedding",
+                            reduction.key = "tricycleEmbedding_",
+                            gname.type = c("SYMBOL"),
+                            species = c("human"))
+
+
+
+plot.df <- FetchData(object = seurat.human, 
+                     vars = c("tricycleEmbedding_1", "tricycleEmbedding_2", "tricyclePosition", "TOP2A"))
+
+
+library(ggplot2)
+library(cowplot)
+p <- tricycle:::.plot_emb_circle_scale(emb.m = plot.df[, 1:2], color.value = plot.df$tricyclePosition, 
+    color_by = "tricyclePosition", point.size = 3.5, point.alpha = 0.9)
+legend <- circle_scale_legend(text.size = 5, alpha = 0.9)
+plot_grid(p, legend, ncol = 2, rel_widths = c(1, 0.4))
+
+#The estimated cell cycle position is bound between 0 and 2pi. Note that we strive to get high resolution of cell cycle state, and we think the continuous position is more appropriate when describing the cell cycle. However, to help users understand the position variable, we also note that users can approximately relate 0.5pi to be the start of S stage, pi to be the start of G2M stage, 1.5pi to be the middle of M stage, and 1.75pi-0.25pi to be G1/G0 stage.
+
+# segment into stages 
+# TO DO: segment tricycle score into cycle poisitions based on above definition
+
+
+plot_ccposition_den(seurat.human@meta.data$tricyclePosition,
+                    seurat.human@meta.data$sampleid, 'sample',
+                    type = "linear",
+                    bw = 10, fig.title = "Kernel density of \u03b8") +
+  theme_bw(base_size = 14)
+
+#ggsave(paste0(output.dir, "Kernal_Density_tricycle_cell_cycle_scoring_seurat_clusters_linear.pdf"))
+
+dev.copy(pdf, paste0(output.dir, "Kernal_Density_tricycle_cell_cycle_scoring_seurat_clusters_linear.pdf"))
+dev.off()
+
+
+plot_ccposition_den(seurat.human@meta.data$tricyclePosition,
+                    seurat.human@meta.data$sampleid, 'sample', 
+                    type = "circular",
+                    bw = 10,  fig.title = "Kernel density of \u03b8") +
+  theme_bw(base_size = 14)
+dev.copy(pdf, paste0(output.dir, "Kernal_Density_tricycle_cell_cycle_scoring_seurat_clusters_circular.pdf"))
+dev.off()
+
+
+
+
+
+
+
+Idents(seurat.human) <- seurat.human@meta.data$seurat_clusters
+temp.object <- subset(seurat.human, idents = c(8:12))
+
+plot_ccposition_den(temp.object@meta.data$tricyclePosition,
+                    temp.object@meta.data$seurat_clusters, 'sample', type = "circular",
+                    bw = 10,  fig.title = "Kernel density of \u03b8") +
+  theme_bw(base_size = 14)
+
+
+
+scCustomize::FeaturePlot_scCustom(seurat.human, features = "tricyclePosition", reduction = "umap.cca.sct")
+
+
+
+
+
+
+
+```
+
+
+
+## Annotate clusters {.tabset}
+
+### Differential gene expression GEX vs seurat_clusters
+```{r DEG_analysis_seurat_clusters}
+
+# create output dir
+output.dir <- paste0("results/DEG_analysis_seurat_clusters/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+################################################
+# Caclulate GEX DEGs for across seurat_clusters 
+################################################
+
+if(long.compute){
+  
+  # set assay
+  DefaultAssay(seurat.mouse) <- "SCT"
+  seurat.mouse <- PrepSCTFindMarkers(seurat.mouse)
+  
+  # DEG calculation using single-cells
+  
+  # set assay
+  DefaultAssay(seurat.mouse) <- "SCT"
+  
+  # format cluster annotations
+  seurat.mouse@meta.data$seurat_clusters <- factor(seurat.mouse@meta.data$seurat_clusters, levels = c(0:length(unique(seurat.mouse@meta.data$seurat_clusters))))
+  
+  # set idents
+  Idents(seurat.mouse) <- "seurat_clusters"
+  
+  seurat_clusters.gex.de <- FindAllMarkers(seurat.mouse,
+                                           assay = "SCT",
+                                           only.pos = TRUE, 
+                                           verbose = TRUE)
+  
+  # save to file 
+  write.csv(seurat_clusters.gex.de, paste0(output.dir, "DEGs_wilcox_single_cell_SCT_seurat_clusters.csv"))
+  
+}else{
+  
+  seurat_clusters.gex.de <- read.csv(paste0(output.dir, "DEGs_wilcox_single_cell_SCT_seurat_clusters.csv"))
+  
+}
+
+
+
+
+```
+
+
+### DEG heatmaps - GEX and ADT - seurat_clusters
+```{r DEG_heatmaps_seurat_clusters}
+
+# create output dir
+output.dir <- paste0("results/DEG_analysis_seurat_clusters/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+if(do.plot){
+  
+  
+  ############
+  # GEX data
+  ############
+  DefaultAssay(seurat.mouse) <- "SCT"
+  
+  # create pseudobulk for visualisation
+  pseudo.seurat <- AggregateExpression(seurat.mouse, 
+                                   assays = "SCT",
+                                   return.seurat = TRUE,
+                                   group.by = c("seurat_clusters"))
+  
+  # set idents of pseudobulk object
+  Idents(pseudo.seurat) <- "seurat_clusters"
+  
+  # extract top 10 DEGs per cluster
+  goi <- seurat_clusters.gex.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::top_n(10, avg_log2FC) %>%
+    dplyr::pull(gene)
+  
+  # heatmap of top 10 degs per cluster
+  DoHeatmap(pseudo.seurat, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + NoLegend()
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmaptop_10_DEGs_seurat_clusters_pseudobulk.pdf"))
+  dev.off()
+  
+  
+  # iterate over the top degs for each cluster 
+  cluster.id <- unique(seurat_clusters.gex.de$cluster)
+  for(i in seq_along(cluster.id)){
+    
+    
+    print(cluster.id[i])
+    
+    goi <- seurat_clusters.gex.de %>%
+      dplyr::filter(p_val_adj < 0.05) %>%
+      dplyr::filter(cluster == cluster.id[i]) %>%
+      dplyr::top_n(50, avg_log2FC)
+    
+    goi <- unique(goi)
+    
+    print(
+      DoHeatmap(pseudo.seurat, 
+                features = goi$gene, 
+                draw.lines = FALSE, 
+                raster = FALSE)
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk__seurat_cluster_", cluster.id[i], ".pdf"))
+    dev.off()
+    
+  }
+  
+}
+
+```
+
+
+
+
+
+
+

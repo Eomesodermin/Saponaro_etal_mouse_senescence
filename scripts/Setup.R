@@ -23,7 +23,7 @@ source("scripts/Load_Packages.R")
 # Parallelization of seurat functions
 ########################################
 
-parallelization <- TRUE
+parallelization <- F
 
 
 if(parallelization){
