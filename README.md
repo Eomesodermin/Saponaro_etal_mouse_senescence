@@ -1,5 +1,7 @@
 # Mouse therapy-induced senescence — single-cell RNA-seq
 
+> **Status:** unpublished work — if you use this analysis, please cite this repository (see [`CITATION.cff`](CITATION.cff)).
+
 Single-cell RNA-seq analysis of **therapy-induced senescence in a mouse model** — the murine
 counterpart to the [human senescence dataset](https://github.com/Eomesodermin/Saponaro_etal_human_senescence).
 
