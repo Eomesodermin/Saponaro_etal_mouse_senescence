@@ -10,7 +10,11 @@ counterpart to the [human senescence dataset](https://github.com/Eomesodermin/Sa
 - `scripts/02_Miriam_Mouse_dataset_overview.Rmd` — dataset overview and senescence-programme visualisation
 
 ## Data
-Processed objects are kept outside version control (archived externally).
+Processed 10x single-cell data (CellRanger filtered/raw feature-barcode matrices and analysis
+outputs for the PTEN and PTEN_CDCP1 samples) are archived on **Zenodo** (restricted access, mouse
+data / manuscript in preparation): **[10.5281/zenodo.21400348](https://doi.org/10.5281/zenodo.21400348)**.
+Data are provided as zip archives — download all and run `unzip '*.zip'` in one directory to
+reconstruct the folder tree.
 
 ---
 Analysis by **Dillon Corvino** · [GitHub](https://github.com/Eomesodermin) · [dilloncorvino.com](https://dilloncorvino.com)
